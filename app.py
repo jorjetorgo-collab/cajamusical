@@ -3,65 +3,70 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- BIBLIOTECA DE SONIDOS 8-BIT (SISTEMA CERRADO) ---
-def generar_nota_8bit(frecuencia, duracion, rate, sustrato_fragmento):
-    t = np.linspace(0, duracion, int(rate * duracion), endpoint=False)
-    # Generamos la base del Nokia (Onda cuadrada para fuerza bruta)
-    onda_pura = np.sign(np.sin(2 * np.pi * frecuencia * t))
-    
-    # Aplicamos el sustrato (Bach) como modulador de identidad
-    # Esto "ensucia" la onda pura con la desentropía de tu archivo
-    if len(sustrato_fragmento) > len(onda_pura):
-        modulador = sustrato_fragmento[:len(onda_pura)]
-    else:
-        modulador = np.pad(sustrato_fragmento, (0, len(onda_pura)-len(sustrato_fragmento)))
-    
-    return onda_pura * (modulador / np.max(np.abs(modulador)) if np.max(np.abs(modulador)) > 0 else 1)
-
-def motor_nokia_torres(sustrato_audio, delta_phi, rate):
-    # 1. DEFINICIÓN DE LA MELODÍA Mn (Para Elisa)
-    # Frecuencias de las notas principales
+# --- MOTOR DE RECONSTRUCCIÓN POR BIBLIOTECA (TORRES v17) ---
+def motor_nokia_extensivo(sustrato_audio, delta_phi, rate):
+    # 1. DICCIONARIO DE FRECUENCIAS (Identidad Mn)
+    # Definimos las notas para una trayectoria más larga
     E5, Dsh5, B4, D5, C5, A4 = 659.25, 622.25, 493.88, 587.33, 523.25, 440.0
+    C4, E4, A4_low = 261.63, 329.63, 440.0 # Notas de acompañamiento
     
-    # La secuencia de la identidad de Beethoven
-    melodia = [
-        (E5, 0.2), (Dsh5, 0.2), (E5, 0.2), (Dsh5, 0.2), (E5, 0.2), 
-        (B4, 0.2), (D5, 0.2), (C5, 0.2), (A4, 0.4)
-    ]
+    # Secuencia extendida de Para Elisa
+    frase_1 = [(E5, 0.2), (Dsh5, 0.2), (E5, 0.2), (Dsh5, 0.2), (E5, 0.2), (B4, 0.2), (D5, 0.2), (C5, 0.2), (A4, 0.4)]
+    frase_2 = [(C4, 0.2), (E4, 0.2), (A4_low, 0.2), (B4, 0.4)]
+    melodia_completa = frase_1 + frase_2 + frase_1 + frase_2
     
-    resultado_final = np.array([], dtype=np.float32)
+    resultado_acumulado = []
     
-    # 2. EL TRAYECTOR (N) RECONSTRUYE DESDE EL DICCIONARIO
-    for i, (frec, dur) in enumerate(melodia):
-        # Usamos el delta_phi para saltar a un punto distinto del sustrato de Bach
-        # para cada nota. Así Bach pierde su orden y cede su identidad a Beethoven.
-        punto_muestreo = int((i * delta_phi * rate) % (len(sustrato_audio) - int(rate * 0.4)))
-        fragmento_bach = sustrato_audio[punto_muestreo : punto_muestreo + int(rate * dur)]
+    # 2. PROCESAMIENTO POR TRAYECTORIA
+    for i, (frec, dur) in enumerate(melodia_completa):
+        t = np.linspace(0, dur, int(rate * dur), endpoint=False)
         
-        nota = generar_nota_8bit(frec, dur, rate, fragmento_bach)
-        resultado_final = np.append(resultado_final, nota)
+        # Generamos el pulso de 8 bits (Onda Cuadrada Nokia)
+        # El delta_phi aquí actúa como el modulador de ancho de pulso (PWM)
+        onda = np.sign(np.sin(2 * np.pi * frec * t * (delta_phi / 2.721055555555556)))
+        
+        # EXTRACCIÓN DEL SUSTRATO (Bach)
+        # Usamos el delta_phi para saltar de forma no lineal en el archivo de Bach
+        punto_muestreo = int((i * delta_phi * rate * 0.5) % (len(sustrato_audio) - len(t)))
+        fragmento_bach = sustrato_audio[punto_muestreo : punto_muestreo + len(t)]
+        
+        # Si el fragmento es corto, lo rellenamos para no perder la identidad
+        if len(fragmento_bach) < len(t):
+            fragmento_bach = np.pad(fragmento_bach, (0, len(t) - len(fragmento_bach)))
+            
+        # IGUALACIÓN: La onda del Nokia se "viste" con los átomos de Bach
+        nota_transmutada = onda * (fragmento_bach / np.max(np.abs(fragmento_bach)) if np.max(np.abs(fragmento_bach)) > 0 else 1)
+        resultado_acumulado.append(nota_transmutada)
     
-    # 3. NORMALIZACIÓN 8-BIT (Auditoría del Horizonte)
-    resultado_final = (resultado_final / np.max(np.abs(resultado_final)) * 127 + 128).astype(np.uint8)
-    return resultado_final
+    # Concatenamos todos los momentos observados
+    mn_final = np.concatenate(resultado_acumulado)
+    
+    # 3. AUDITORÍA DEL HORIZONTE (8-bit uint8)
+    mn_final = (mn_final / np.max(np.abs(mn_final)) * 127 + 128).astype(np.uint8)
+    return mn_final
 
 # --- INTERFAZ ---
-st.title("🛡️ Reconstructor de Identidad v16")
-st.write("Usando Bach como 'biblioteca de átomos' para reconstruir Para Elisa (8-bit)")
+st.title("🛡️ Trayector v17: Fuerza Bruta Nokia")
+st.write("Transmutando Bach en una trayectoria extendida de Beethoven.")
 
-delta_phi = st.sidebar.number_input("ΔΦ (15 decimales)", format="%.15f", value=2.721055555555556)
+# El valor maestro de 15 decimales
+delta_phi = st.sidebar.number_input(
+    "Diferencial de Identidad (ΔΦ)", 
+    format="%.15f", 
+    value=2.721055555555556, 
+    step=1e-15
+)
 
-archivo = st.file_uploader("Subir Bach (Sustrato de átomos)", type=["wav"])
+archivo = st.file_uploader("Subir Bach M0", type=["wav"])
 
 if archivo is not None:
     rate, data = wavfile.read(archivo)
     if len(data.shape) > 1: data = data[:, 0]
     
-    if st.button("Reconstrucción Forzada"):
-        with st.spinner("Extrayendo átomos de Bach para Beethoven..."):
-            # Aquí ocurre la magia: Bach ya no dicta el tiempo, solo presta sus bits
-            resultado = motor_nokia_torres(data, delta_phi, rate)
+    if st.button("Reconstruir Identidad"):
+        with st.spinner("Ensamblando Momentum Mn..."):
+            resultado = motor_nokia_extensivo(data, delta_phi, rate)
             buffer = io.BytesIO()
             wavfile.write(buffer, rate, resultado)
-            st.success("Soberanía recuperada: Para Elisa 8-bit manifestada.")
+            st.success("Soberanía recuperada (Duración extendida).")
             st.audio(buffer, format='audio/wav')
