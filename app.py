@@ -3,65 +3,65 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE TRANSMUTACIÓN DE TORRES ---
-def generar_m0b(audio_data, delta_phi, rate):
+# --- MOTOR DE TRANSMUTACIÓN HUMANA (TORRES v5) ---
+def motor_transmutacion_pro(audio_data, delta_phi, rate):
     n_samples = len(audio_data)
-    # Tamaño del grano de identidad
-    grain_size = int(rate * 0.04) 
-    num_grains = n_samples // grain_size
+    # Grano más grande para capturar la resonancia del piano (100ms)
+    grain_size = int(rate * 0.1) 
+    # Superposición (Overlap) para que no suene a "hule"
+    overlap = int(grain_size * 0.5)
+    step_size = grain_size - overlap
     
-    # Creamos el nuevo sustrato vacío
-    output = np.zeros(n_samples)
+    output = np.zeros(n_samples + grain_size)
     
-    # Generamos una trayectoria no lineal basada en el ΔΦ
-    # Esto asegura que no lea a Bach en orden, sino que salte
-    # buscando la nueva estructura de Para Elisa.
-    t_grain = np.arange(num_grains, dtype=np.float64)
+    # El ΔΦ actúa como el "director de orquesta"
+    t_steps = np.arange(0, n_samples - grain_size, step_size)
     
-    # Esta es la "Llave de Reordenamiento"
-    # El ΔΦ altera la posición original de cada grano
-    mapeo_caotico = (np.sin(t_grain * delta_phi) * 0.5 + 0.5) * (num_grains - 1)
-    indices_reordenados = mapeo_caotico.astype(np.int64)
-
-    for i, idx_bach in enumerate(indices_reordenados):
-        # Punto de origen en Bach (M0)
-        start_bach = idx_bach * grain_size
-        # Punto de destino en el nuevo M0b (Para Elisa)
-        start_out = i * grain_size
+    for i, start_out in enumerate(t_steps):
+        # Mapeo de Identidad: Buscamos el grano en Bach
+        # Agregamos una función de coherencia para evitar el sonido de motor
+        pos_relative = (np.sin(i * delta_phi) * 0.5 + 0.5)
+        start_bach = int(pos_relative * (n_samples - grain_size))
         
-        if start_out + grain_size < n_samples and start_bach + grain_size < n_samples:
-            grano = audio_data[start_bach : start_bach + grain_size]
-            ventana = np.hanning(grain_size)
-            output[start_out : start_out + grain_size] += grano * ventana
+        # Extraemos el grano de M0
+        grano = audio_data[start_bach : start_bach + grain_size].astype(np.float32)
+        
+        # Aplicamos envolvente de piano (Ataque y Decaimiento suave)
+        # Esto elimina el sonido de "trastes lavados"
+        ventana = np.blackman(grain_size) 
+        
+        # Inserción en el nuevo sustrato con suma de fase
+        output[start_out : start_out + grain_size] += grano * ventana
             
+    # Normalización para evitar saturación
+    output = (output / np.max(np.abs(output)) * 32767).astype(np.int16)
     return output
 
 # --- INTERFAZ ---
-st.set_page_config(page_title="Trayector Torres v4", page_icon="🛡️")
-st.title("🛡️ Generador de Sustrato $M_{0b}$")
-st.markdown("### Transmutación: Bach $\\rightarrow$ Para Elisa")
+st.set_page_config(page_title="Trayector Torres v5", page_icon="🎹")
+st.title("🎹 Transmutador de Piano Pro")
+st.markdown("### De Bach a Para Elisa: Síntesis de Identidad")
 
 delta_phi = st.sidebar.number_input(
     "Diferencial de Fase (ΔΦ)", 
     format="%.15f", 
-    value=1.618033988749895, # Prueba con Phi o con tus 15 decimales
+    value=2.721055555555556, 
     step=1e-15
 )
 
-archivo = st.file_uploader("Subir Bach 1 (.wav)", type=["wav"])
+archivo = st.file_uploader("Subir Bach original (.wav)", type=["wav"])
 
 if archivo is not None:
     rate, data = wavfile.read(archivo)
     if len(data.shape) > 1: data = data[:, 0]
     
-    if st.button("Generar Nueva Identidad"):
-        with st.spinner("Remapeando muestras..."):
-            # Generamos el nuevo sustrato
-            resultado = generar_m0b(data, delta_phi, rate)
+    if st.button("Ejecutar Interpretación"):
+        with st.spinner("Generando interpretación humana..."):
+            resultado = motor_transmutacion_pro(data, delta_phi, rate)
             
             buffer = io.BytesIO()
-            wavfile.write(buffer, rate, resultado.astype(np.int16))
+            wavfile.write(buffer, rate, resultado)
             
-            st.success("Sustrato $M_{0b}$ generado con éxito.")
+            st.success("Sustrato $M_{0b}$ listo.")
             st.audio(buffer, format='audio/wav')
-            st.download_button("Descargar Para Elisa (M0b)", buffer, "m0b_elisa.wav")
+            st.download_button("Descargar M0b Final", buffer, "elisa_pro.wav")
