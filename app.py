@@ -3,57 +3,47 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE IDENTIDAD ARMÓNICA (TORRES v9) ---
-def motor_armonico_m0b(m0_data, delta_phi, rate):
-    # 1. Preparación del sustrato
-    m0_32 = m0_data.astype(np.float32) / 32768.0
-    n_samples = len(m0_32)
-    grain_size = int(rate * 0.04) # 40ms para capturar la "nota"
-    m0b_final = np.zeros(n_samples)
+# --- MOTOR DE CUANTIZACIÓN DE IDENTIDAD (TORRES v10) ---
+def motor_cuantizado_m0b(m0_data, delta_phi, rate):
+    # 1. ALTA RESOLUCIÓN: 64-bit para precisión total del Delta Phi
+    m0_64 = m0_data.astype(np.float64) / 32768.0
+    n_samples = len(m0_64)
     
-    # 2. Generación de la "Frecuencia Guía" (Beethoven Virtual)
-    # Creamos una señal de referencia basada en tu ΔΦ
-    t_ref = np.linspace(0, n_samples/rate, n_samples)
-    # Esta es la trayectoria ideal que Beethoven debería seguir
-    guia_beethoven = np.sin(2 * np.pi * delta_phi * 100 * t_ref) 
+    # 2. DEFINICIÓN DE LA REJILLA (Tempo de Para Elisa)
+    bpm = 120 
+    samples_per_beat = int(rate * (60 / bpm) * 0.25) # Semicorcheas
+    m0b_final = np.zeros(n_samples + samples_per_beat)
+    
+    # 3. ENSAMBLAJE POR PULSOS
+    for i in range(0, n_samples - samples_per_beat, samples_per_beat):
+        # El ΔΦ ahora decide qué "celda" de Bach corresponde a esta celda de Beethoven
+        t = i / n_samples
+        
+        # Trayectoria de Identidad: Buscamos la coincidencia rítmica
+        desfase_identidad = (np.sin(t * delta_phi) * 0.5 + 0.5)
+        idx_origen = int(desfase_identidad * (n_samples - samples_per_beat))
+        
+        # Extraemos el "átomo" de piano
+        atomo = m0_64[idx_origen : idx_origen + samples_per_beat]
+        
+        # Aplicamos envolvente de percusión (Piano Attack)
+        # Esto quita el sonido de "trastes" y da el golpe de la tecla
+        ventana = np.exp(-np.linspace(0, 5, len(atomo))) 
+        
+        m0b_final[i : i + samples_per_beat] += atomo * ventana
 
-    # 3. Re-ensamblaje por Afinidad
-    step = int(grain_size * 0.5)
-    for i in range(0, n_samples - grain_size, step):
-        # En lugar de saltar al azar, buscamos en Bach un grano 
-        # cuya energía coincida con el momento de la fase guía
-        t_actual = i / n_samples
-        
-        # El ΔΦ define la "ventana de búsqueda" en Bach
-        ventana_inicio = int((t_actual * 0.5) * n_samples)
-        ventana_fin = int(min(ventana_inicio + (rate * 2), n_samples - grain_size))
-        
-        # BUSQUEDA: Encontramos el punto en Bach que "vibra" igual que la guía
-        # (Esto es una simplificación de tu desentropía para que corra en Streamlit)
-        search_area = m0_32[ventana_inicio : ventana_fin : 100] # Muestreo rápido
-        best_match_idx = np.argmax(np.abs(search_area)) * 100 + ventana_inicio
-        
-        # Extraemos y aplicamos ventana
-        grano = m0_32[best_match_idx : best_match_idx + grain_size]
-        env = np.hanning(len(grano))
-        
-        if i + len(grano) < n_samples:
-            m0b_final[i : i + len(grano)] += grano * env
-
-    # 4. Normalización Final
+    # 4. NORMALIZACIÓN Y SALIDA
     m0b_final = m0b_final / (np.max(np.abs(m0b_final)) + 1e-9)
     return (m0b_final * 32767).astype(np.int16)
 
 # --- INTERFAZ ---
-st.set_page_config(page_title="Trayector Armónico v9", page_icon="🎼")
-st.title("🎼 Trayector v9: Coherencia de Sustrato")
-st.write("Buscando la identidad de Beethoven dentro de los átomos de Bach.")
+st.title("🛡️ Trayector v10: Cuantización de Identidad")
+st.write("Alineando el sustrato de Bach a la rejilla temporal de Beethoven.")
 
-# El Delta Phi ahora es una frecuencia de búsqueda
 delta_phi = st.sidebar.number_input(
-    "Diferencial de Resonancia", 
+    "Diferencial de Rejilla", 
     format="%.15f", 
-    value=3.296275555555556, # Sintonía con Mi
+    value=2.721055555555556, 
     step=1e-15
 )
 
@@ -63,10 +53,10 @@ if archivo is not None:
     rate, data = wavfile.read(archivo)
     if len(data.shape) > 1: data = data[:, 0]
     
-    if st.button("Sintonizar Identidad"):
-        with st.spinner("Analizando afinidades armónicas..."):
-            resultado = motor_armonico_m0b(data, delta_phi, rate)
+    if st.button("Cuantizar y Transmutar"):
+        with st.spinner("Sincronizando fases armónicas..."):
+            resultado = motor_cuantizado_m0b(data, delta_phi, rate)
             buffer = io.BytesIO()
             wavfile.write(buffer, rate, resultado)
-            st.success("Transmutación por afinidad completada.")
+            st.success("M0b sintonizado a la rejilla.")
             st.audio(buffer, format='audio/wav')
