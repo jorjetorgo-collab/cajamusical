@@ -3,71 +3,70 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- 1. EL EXTRACTOR CIEGO (ADN) ---
+# --- 1. EL EXTRACTOR CIEGO ---
+# No sabe qué canción es, solo mide la relación de cambio
 def extraer_delta_phi(frecuencias):
     if len(frecuencias) < 2: return 1.0
-    # Limpieza de ceros para evitar errores matemáticos
-    f_limpias = [f if f > 0 else 0.1 for f in frecuencias]
-    cambios = [f_limpias[i+1] / f_limpias[i] for i in range(len(f_limpias)-1)]
-    # La firma pura del diferencial
+    cambios = [frecuencias[i+1] / frecuencias[i] for i in range(len(frecuencias)-1)]
+    # El diferencial absoluto: la huella pura del sustrato
     return np.mean(cambios) * np.std(cambios)
 
-# --- 2. EL MOTOR DE MANIFESTACIÓN ---
-def motor_universal(delta_phi, partitura, constante_c, rate=22050):
-    duracion = 8  # Tiempo de ejecución
+# --- 2. EL TRAYECTOR FIJO (Ñ) ---
+# Este código NO se cambia. Es la constante del universo Nokia.
+def motor_universal_torres(delta_phi, partitura, rate=22050):
+    duracion = 10 
     n_samples = int(rate * duracion)
     resultado = np.zeros(n_samples)
     fase_acumulada = 0.0
     
+    # CONSTANTE UNIVERSAL DE ACOPLAMIENTO
+    # Se queda fija en 50.0 para todas las identidades
+    C_UNIVERSAL = 50.0 
+    
     for i in range(n_samples):
         t = i / rate
-        # Ñ (El Trayector) fluye según el ADN y la Presión (C)
-        index = int(np.floor(t * (delta_phi * constante_c))) % len(partitura)
+        # El flujo de Ñ depende EXCLUSIVAMENTE del Delta Phi
+        ñ = int(np.floor(t * (delta_phi * C_UNIVERSAL))) % len(partitura)
         
-        frecuencia = partitura[index]
-        if frecuencia > 0.5:
-            # Generación de onda cuadrada (Nokia Style)
-            incremento = (2 * np.pi * frecuencia) / rate
-            fase_acumulada += incremento
-            muestra = 1.0 if np.sin(fase_acumulada) > 0 else -1.0
-        else:
-            muestra = 0  # Silencio absoluto para el 0
-            
-        # El "staccato" o pulso rítmico del sistema
-        if (t * (delta_phi * constante_c)) % 1.0 > 0.8: muestra = 0
+        frecuencia = partitura[ñ]
+        incremento = (2 * np.pi * frecuencia) / rate
+        fase_acumulada += incremento
+        
+        muestra = 1.0 if np.sin(fase_acumulada) > 0 else -1.0
+        # Silencio rítmico estándar del sistema
+        if (t * (delta_phi * C_UNIVERSAL)) % 1.0 > 0.8: muestra = 0
         resultado[i] = muestra
             
     return (127 * resultado + 128).astype(np.uint8)
 
-# --- 3. INTERFAZ (SISTEMA ABIERTO) ---
-st.title("🛡️ Motor v54: Puerto de Inyección")
+# --- INTERFAZ DE IDENTIDADES ---
+st.title("🛡️ Motor de Igualación Final v51")
+st.write("Un solo algoritmo. Infinitas identidades.")
 
-# Controles de Usuario
-c_presion = st.slider("Ajuste de Presión (C):", 5.0, 150.0, 40.0)
+biblioteca = {
+    "Para Elisa": "659, 622, 659, 622, 659, 493, 587, 523, 440",
+    "Star Wars": "392, 587, 523, 493, 440, 783, 587",
+    "Fuga de Bach": "587, 554, 587, 440, 523, 349, 392, 587",
+    "Smooth Criminal": "440, 440, 440, 392, 440, 523, 440, 392",
+    "Virus (Trance)": "130, 130, 130, 155, 174, 130, 130, 196"
+}
 
-# El Puerto de Entrada: Aquí pegas lo que quieras
-st.subheader("Inyector de ADN Musical")
-input_libre = st.text_area(
-    "Escribe las frecuencias separadas por coma (0 para silencio):",
-    "261.63, 0, 261.63, 233.08, 261.63, 0, 261.63, 233.08, 261.63, 0, 261.63, 196.0, 207.6"
-)
+seleccion = st.selectbox("Inyectar ADN desde la Biblioteca:", list(biblioteca.keys()))
+input_personalizado = st.text_input("O inyecta ADN manual (frecuencias):", biblioteca[seleccion])
 
 try:
-    # Procesamiento de la entrada
-    notas = [float(x.strip()) for x in input_libre.split(",")]
+    notas = [float(x.strip()) for x in input_personalizado.split(",")]
+    # Aquí sucede la magia: el número surge de la partitura
     d_phi = extraer_delta_phi(notas)
     
-    col1, col2 = st.columns(2)
-    col1.metric("ΔΦ (Identidad)", f"{d_phi:.6f}")
-    col2.metric("Velocidad (Notas/s)", f"{d_phi * c_presion:.2f}")
+    st.write(f"**ΔΦ Calculado:** `{d_phi:.15f}`")
 
-    if st.button("🔥 MANIFESTAR ADN"):
-        audio_data = motor_universal(d_phi, notas, c_presion)
+    if st.button("Manifestar"):
+        # Se usa el mismo motor para TODO
+        audio = motor_universal_torres(d_phi, notas)
         buffer = io.BytesIO()
-        wavfile.write(buffer, 22050, audio_data)
+        wavfile.write(buffer, 22050, audio)
         st.audio(buffer, format='audio/wav')
         
-    st.info("💡 Tip: Para baladas baja C a 20. Para ritmos agresivos sube C a 60.")
-
 except Exception as e:
-    st.warning("Esperando entrada de ADN válida...")
+    st.error(f"Error en el sustrato: {e}")
