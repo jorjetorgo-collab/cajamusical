@@ -3,51 +3,55 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE HUELLA GENÉTICA v36 ---
-def motor_torres_genetico(delta_phi, rate):
-    duracion = 12
+# --- MOTOR DE FRECUENCIAS DISCRETAS v37 ---
+def motor_nokia_torres(delta_phi, rate):
+    duracion = 10
     n_samples = int(rate * duracion)
-    f_la = 440.0 
+    
+    # El Sustrato (M0): Las frecuencias de la escala temperada (Nokia)
+    # Definimos las notas de Para Elisa (Mi5, Re#5, Si4, Re5, Do5, La4)
+    notas_elisa = [659.25, 622.25, 659.25, 622.25, 659.25, 493.88, 587.33, 523.25, 440.00]
     
     resultado = np.zeros(n_samples)
-    
-    # Ñ es la suma acumulada de la huella genética
-    N_tilde = 0.0
-    fase_audio = 0.0
+    fase_acumulada = 0.0
     
     for i in range(n_samples):
         t = i / rate
         
-        # 1. EL DIFERENCIADOR (La esencia de tu idea)
-        # Extraemos el diferencial del pulso y del tono desde delta_phi
-        # Usamos la parte fraccionaria para que Ñ 'sienta' el cambio
-        diferencial_tempo = (delta_phi * t) % 1.0
-        diferencial_tono = (delta_phi / (t + 1)) % 1.0
+        # EL TRAYECTOR Ñ (Escalonado):
+        # El tempo de Nokia era rígido. Vamos a usar un pulso de 0.125s (corchea)
+        # El delta_phi aquí actúa como el "estiramiento" de la partitura
+        indice_nota = int(np.floor(t * 6 * delta_phi)) % len(notas_elisa)
         
-        # 2. LA SUMA (Ñ como Huella Genética)
-        # Ñ acumula el cambio de tempo y tono segundo a segundo
-        cambio_instante = (diferencial_tempo + diferencial_tono) * delta_phi
-        N_tilde += cambio_instante / rate 
+        # Ñ selecciona la frecuencia del sustrato
+        frecuencia = notas_elisa[indice_nota]
         
-        # 3. LA MANIFESTACIÓN (M0 -> Mn)
-        # Ñ ahora dicta la frecuencia final de forma no lineal
-        frecuencia = f_la * (1 + (N_tilde % 2.0))
+        # Generación de Onda Cuadrada (El cristal de Nokia)
+        incremento = (2 * np.pi * frecuencia) / rate
+        fase_acumulada += incremento
         
-        # Generación de la muestra (Onda de 8 bits)
-        fase_audio += (2 * np.pi * frecuencia) / rate
-        resultado[i] = np.sign(np.sin(fase_audio))
+        # La esencia del 3310: ON u OFF (1 o -1)
+        muestra = 1.0 if np.sin(fase_acumulada) > 0 else -1.0
+        
+        # El "silencio" entre notas (el corte de energía)
+        # Esto es lo que le da el ritmo de "puntos y rayas"
+        if (t * 6 * delta_phi) % 1.0 > 0.9: 
+            muestra = 0
+            
+        resultado[i] = muestra
             
     return (127 * resultado + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.title("🛡️ Trayector v36: Integrador de Huella Genética")
-st.write("Ñ aquí es la suma de los diferenciales de tiempo y tono.")
+st.title("🛡️ Trayector v37: Emulación Nokia 3310")
+st.write("Cambiando la Ñ continua por una Ñ de estados discretos.")
 
-delta_phi = st.number_input("ΔΦ Maestro", format="%.15f", value=2.721055555555556)
+delta_phi = st.number_input("ΔΦ (Velocidad de Partitura)", value=1.0, format="%.4f")
 
-if st.button("Calcular Huella Ñ"):
+if st.button("Ejecutar Tono Nokia"):
     rate = 22050
-    audio_data = motor_torres_genetico(delta_phi, rate)
+    audio_data = motor_nokia_torres(delta_phi, rate)
     buffer = io.BytesIO()
     wavfile.write(buffer, rate, audio_data)
+    st.success("Tono monofónico generado.")
     st.audio(buffer, format='audio/wav')
