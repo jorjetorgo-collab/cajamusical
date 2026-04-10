@@ -3,55 +3,37 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- SUSTRATO CROMÁTICO (Abecedario 8-bit) ---
-def generar_sustrato_estándar(rate):
-    # Do4 a Si4 (Octava central limpia)
-    frecuencias = [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 
-                   369.99, 392.00, 415.30, 440.00, 466.16, 493.88]
-    muestras_por_nota = int(rate * 0.4) # Notas más largas para mayor estabilidad
-    sustrato = np.array([])
+# --- MOTOR DE IDENTIDAD DIRECTA v25 ---
+def motor_torres_directo(delta_phi, rate):
+    # Mn: 10 segundos de manifestación
+    duracion = 10
+    t = np.arange(int(rate * duracion)) / rate
     
-    for f in frecuencias:
-        t = np.linspace(0, 0.4, muestras_por_nota, endpoint=False)
-        # Fuerza bruta: Onda Cuadrada
-        nota = np.sign(np.sin(2 * np.pi * f * t))
-        sustrato = np.append(sustrato, nota)
-    return sustrato
-
-# --- MOTOR TRAYECTOR v24 (Decodificador) ---
-def motor_torres_decodificador(delta_phi, rate):
-    sustrato = generar_sustrato_estándar(rate)
-    n_samples_lib = len(sustrato)
+    # EL AXIOMA DE TORRES:
+    # No buscamos en una biblioteca. El Delta Phi es la semilla que genera 
+    # la frecuencia. Usamos una función que salte entre armónicos naturales.
+    # El valor 2.721055555555556 dictará los saltos tonales.
     
-    duracion_out = 15 # Aumentamos a 15 segundos para dar espacio
-    n_samples_out = int(rate * duracion_out)
-    resultado_mn = np.zeros(n_samples_out)
+    # Creamos una serie de armónicos basados en el diferencial
+    frecuencia_base = 440.0 # La4
     
-    t = np.arange(n_samples_out) / rate
+    # La fase se modula con el Delta Phi para crear "escalones" de sonido
+    fase_modulada = np.floor(t * delta_phi * 4) / 4
     
-    # EL AJUSTE DE DESACELERACIÓN:
-    # Reducimos el factor multiplicador del tiempo. 
-    # Usamos 'np.floor' para que el trayector se "ancle" a la nota 
-    # y no pase volando sobre ella (lo que creaba el efecto de escala rápida).
-    paso_humano = 2.0 # Factor de velocidad melódica
-    indices = (np.floor(t * delta_phi * paso_humano) * (rate * 0.4)) % n_samples_lib
+    # Generamos la onda cuadrada (Identidad 8-bit)
+    onda = np.sign(np.sin(2 * np.pi * frecuencia_base * fase_modulada * t))
     
-    for i in range(n_samples_out):
-        idx = int(indices[i])
-        # Aseguramos que el índice no desborde el sustrato
-        resultado_mn[i] = sustrato[idx % n_samples_lib]
-        
-    # Salida 8-bit pura
-    mn_max = np.max(np.abs(resultado_mn)) if np.max(np.abs(resultado_mn)) > 0 else 1
-    return (127 * (resultado_mn / mn_max) + 128).astype(np.uint8)
+    # Auditoría del Horizonte (8-bit)
+    resultado = (127 * onda + 128).astype(np.uint8)
+    return resultado
 
 # --- INTERFAZ ---
-st.set_page_config(page_title="🛡️ Torres v24 - Decodificador", page_icon="🕵️")
-st.title("🛡️ Trayector v24: Decodificador Temporal")
-st.write("Ralentizando la trayectoria para manifestar la identidad Mn.")
+st.set_page_config(page_title="🛡️ Torres v25 - Oscilador Directo", page_icon="⚡")
+st.title("🛡️ Trayector v25: Oscilador de Identidad Directo")
+st.write("Generación de Mn pura sin sustratos externos. El sonido nace del ΔΦ.")
 
 delta_phi = st.sidebar.number_input(
-    "ΔΦ (Diferencial de Identidad)", 
+    "Diferencial de Fase (ΔΦ)", 
     format="%.15f", 
     value=2.721055555555556, 
     step=1e-15
@@ -59,12 +41,4 @@ delta_phi = st.sidebar.number_input(
 
 rate = 22050
 
-if st.button("Decodificar Identidad"):
-    with st.spinner("Estabilizando el horizonte de eventos..."):
-        resultado = motor_torres_decodificador(delta_phi, rate)
-        
-        buffer = io.BytesIO()
-        wavfile.write(buffer, rate, resultado)
-        
-        st.success("Trayectoria estabilizada.")
-        st.audio(buffer, format='audio/wav')
+if st
