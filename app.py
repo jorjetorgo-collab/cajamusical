@@ -3,79 +3,66 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE GENERACIÓN DE SUSTRATO PURO ---
-def generar_sustrato_nokia_puro(rate):
-    # Generamos las 12 notas de la escala cromática (Do a Si)
-    # Frecuencias base (Octava 4)
+# --- GENERADOR DE ESCALA CROMÁTICA CONTINUA ---
+def generar_sustrato_fluido(rate):
+    # Generamos las 12 notas de la octava central
     frecuencias = [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 
                    369.99, 392.00, 415.30, 440.00, 466.16, 493.88]
-    duracion_nota = 0.5
-    sustrato_completo = np.array([])
+    muestras_por_nota = int(rate * 0.1) # Notas muy cortas para mayor densidad
+    sustrato = np.array([])
     
     for f in frecuencias:
-        t = np.linspace(0, duracion_nota, int(rate * duracion_nota), endpoint=False)
-        # Onda cuadrada pura (Fuerza bruta 8-bit)
+        t = np.linspace(0, 0.1, muestras_por_nota, endpoint=False)
+        # Onda cuadrada (Nokia 8-bit)
         nota = np.sign(np.sin(2 * np.pi * f * t))
-        sustrato_completo = np.append(sustrato_completo, nota)
-        
-    return sustrato_completo
+        sustrato = np.append(sustrato, nota)
+    return sustrato
 
-# --- MOTOR DE TRAYECTORIA v22 ---
-def motor_torres_puro(delta_phi, rate):
-    # 1. Creamos el sustrato M0 internamente (Sin ruidos externos)
-    sustrato = generar_sustrato_nokia_puro(rate)
+# --- MOTOR TRAYECTOR v23 ---
+def motor_torres_fluido(delta_phi, rate):
+    sustrato = generar_sustrato_fluido(rate)
     n_samples_lib = len(sustrato)
     
-    # 2. Mn: El momentum observado (10 segundos)
     duracion_out = 10
     n_samples_out = int(rate * duracion_out)
     resultado_mn = np.zeros(n_samples_out)
     
-    # 3. EL TRAYECTOR (N): Escaneo sobre la escala pura
     t = np.arange(n_samples_out) / rate
     
-    # Aplicamos el diferencial de fase para decidir el "paso"
-    # El delta_phi ahora sintoniza directamente sobre la escala cromática
-    pasos = (np.floor(t * delta_phi * 5.5) * (rate * 0.5)) % n_samples_lib
+    # EL AJUSTE MAESTRO: 
+    # Usamos una función seno basada en Delta Phi para que el trayector 
+    # "baile" sobre la escala cromática de forma constante.
+    # Esto garantiza que SIEMPRE haya sonido.
+    indices = ((np.sin(t * delta_phi) + 1) / 2 * (n_samples_lib - 1))
     
     for i in range(n_samples_out):
-        idx = int(pasos[i])
+        idx = int(indices[i])
         resultado_mn[i] = sustrato[idx]
         
-    # 4. AUDITORÍA DEL HORIZONTE
+    # Normalización y salida 8-bit
     mn_max = np.max(np.abs(resultado_mn)) if np.max(np.abs(resultado_mn)) > 0 else 1
     return (127 * (resultado_mn / mn_max) + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.set_page_config(page_title="🛡️ Torres v22 - Generador de Realidad", page_icon="🎹")
-st.title("🛡️ Trayector v22: Reconstrucción desde Sustrato Puro")
-st.write("Generando un abecedario de 8 bits para extraer a Beethoven.")
+st.set_page_config(page_title="🛡️ Torres v23 - Oscilador", page_icon="🌊")
+st.title("🛡️ Trayector v23: Oscilación de Identidad")
+st.write("Sintonizando la escala cromática pura mediante el diferencial de fase.")
 
 delta_phi = st.sidebar.number_input(
-    "Diferencial de Fase (ΔΦ)", 
+    "ΔΦ (Frecuencia de Identidad)", 
     format="%.15f", 
     value=2.721055555555556, 
     step=1e-15
 )
 
-rate = 22050 # Frecuencia de muestreo estándar para 8-bit
+rate = 22050
 
-if st.button("Manifestar Identidad Pura"):
-    with st.spinner("Fabricando sustrato y sintonizando Mn..."):
-        # Ya no pedimos archivo, generamos la realidad aquí:
-        resultado = motor_torres_puro(delta_phi, rate)
+if st.button("Generar Sonido de Identidad"):
+    with st.spinner("Haciendo vibrar el sustrato..."):
+        resultado = motor_torres_fluido(delta_phi, rate)
         
         buffer = io.BytesIO()
         wavfile.write(buffer, rate, resultado)
         
-        st.success("Igualación final completada sobre sustrato de control.")
+        st.success("Trayectoria sintonizada.")
         st.audio(buffer, format='audio/wav')
-        
-        st.download_button(
-            label="Descargar Mn Pura",
-            data=buffer.getvalue(),
-            file_name="beethoven_puro_8bit.wav",
-            mime="audio/wav"
-        )
-
-st.info("Esta versión no requiere archivos externos. El ΔΦ busca la melodía en una escala cromática pura generada por el código.")
