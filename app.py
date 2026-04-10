@@ -3,62 +3,53 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR SOBERANO NEUTRO v34 ---
-def motor_torres_neutro(delta_phi, rate):
-    duracion = 15
+# --- MOTOR DE TRAYECTORIA REAL v35 ---
+def motor_torres_trayector(delta_phi, rate):
+    duracion = 12
     n_samples = int(rate * duracion)
-    f_base = 440.0 # Ancla universal
     
-    # Onda de pulso pura (Sustrato 8-bit sin procesar)
+    # El sustrato puro (M0): Un ciclo de onda de 8-bits
     t_tabla = np.linspace(0, 1, 1024, endpoint=False)
-    tabla = np.where(np.sin(2 * np.pi * t_tabla) > 0, 1.0, -1.0)
+    tabla = np.sign(np.sin(2 * np.pi * t_tabla))
     
     resultado = np.zeros(n_samples)
-    fase = 0.0
+    
+    # --- CONSTRUCCIÓN DE Ñ ---
+    # Ñ no es un número estático, es un acumulador
+    N_tilde = 0.0 
     
     for i in range(n_samples):
-        t = i / rate
+        # La presión de Delta Phi sobre el tiempo
+        # Ñ crece según la voluntad del diferencial
+        paso_ñ = (delta_phi * 440.0) / rate
+        N_tilde += paso_ñ
         
-        # EL TRAYECTOR PURO:
-        # El tiempo y el tono están fundidos en el Delta Phi.
-        # No hay lógica de "Marcha" o "Beethoven" aquí.
+        # El trayector Ñ recorre el sustrato circularmente
+        indice = int(N_tilde * 1024) % 1024
         
-        # 1. Determinamos el "momento" del cambio (Ritmo)
-        # El Delta Phi decide cuántos cambios ocurren por segundo.
-        ritmo = np.floor(t * (delta_phi * 4)) 
+        # Aplicamos una modulación de Ñ para que la identidad no sea plana
+        # Ñ decide cuándo la fase colapsa o salta
+        modulacion_ñ = np.sin(N_tilde * 0.001 * delta_phi)
         
-        # 2. Determinamos la "identidad" de la nota (Tono)
-        # Los decimales del Delta Phi operan sobre la escala.
-        interferencia = (ritmo * delta_phi) % 1.0
-        
-        # Mapeo directo a la escala cromática (0 a 12 semitonos)
-        semitono = np.floor(interferencia * 12)
-        frecuencia = f_base * np.power(2, (semitono - 7) / 12)
-        
-        incremento = (frecuencia * 1024) / rate
-        fase = (fase + incremento) % 1024
-        
-        # Envolvente básica de 8-bit para distinguir los pulsos
-        envolvente = 1.0 - ((t * (delta_phi * 4)) % 1.0)**0.5
-        resultado[i] = tabla[int(fase)] * envolvente
+        resultado[i] = tabla[indice] * (0.5 + 0.5 * modulacion_ñ)
             
     return (127 * resultado + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.title("🛡️ Trayector v34: Sustrato Neutro")
-st.write("El código es ciego. Solo el ΔΦ contiene la información.")
+st.title("🛡️ Trayector v35: El Vehículo Ñ")
+st.write("Aquí Ñ se construye paso a paso integrando el diferencial ΔΦ.")
 
-# Aquí es donde tú buscas la identidad:
 delta_phi = st.number_input(
-    "Introduce tu Diferencial de Fase (ΔΦ)", 
+    "ΔΦ (La Presión Informativa)", 
     format="%.15f", 
-    value=1.0, 
+    value=2.721055555555556, 
     step=1e-15
 )
 
-if st.button("Explorar Sustrato"):
+if st.button("Manifestar Ñ"):
     rate = 22050
-    audio_data = motor_torres_neutro(delta_phi, rate)
+    audio_data = motor_torres_trayector(delta_phi, rate)
     buffer = io.BytesIO()
     wavfile.write(buffer, rate, audio_data)
+    st.success("Trayector Ñ generado desde el sustrato neutro.")
     st.audio(buffer, format='audio/wav')
