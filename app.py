@@ -3,61 +3,57 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE IDENTIDAD INVARIANTE v26 ---
-def motor_torres_wavetable(delta_phi, rate):
-    duracion = 10
+# --- MOTOR DE REFERENCIA 440Hz v29 ---
+def motor_torres_440(delta_phi, rate):
+    duracion = 12
     n_samples = int(rate * duracion)
     
-    # 1. Creamos un ciclo de onda pura (El Átomo)
-    # Una simple onda cuadrada de 256 muestras
-    tamaño_tabla = 256
-    tabla = np.sign(np.sin(2 * np.pi * np.linspace(0, 1, tamaño_tabla, endpoint=False)))
+    # La frecuencia de referencia soberana
+    f_la = 440.0 
+    
+    # Generamos la tabla de onda (8-bit pura)
+    t_tabla = np.linspace(0, 1, 1024, endpoint=False)
+    tabla = np.sign(np.sin(2 * np.pi * t_tabla))
     
     resultado = np.zeros(n_samples)
-    posicion = 0.0
-    
-    # 2. EL TRAYECTOR (N):
-    # La velocidad de lectura de la tabla depende de Delta Phi.
-    # Sintonizamos para que el rango de frecuencias sea captable (200Hz - 2000Hz)
-    frecuencia_maestra = (delta_phi * 100) % 1000 + 200
+    fase_acumulada = 0.0
     
     for i in range(n_samples):
-        # El incremento de fase dictado por la ley de Torres
-        incremento = (frecuencia_maestra * tamaño_tabla) / rate
-        posicion = (posicion + incremento) % tamaño_tabla
+        t = i / rate
         
-        # Aplicamos una modulación rítmica basada en los decimales de delta_phi
-        # Esto creará los "saltos" de la melodía
-        modulador_ritmo = np.floor(i / (rate * 0.2)) # Cambia cada 0.2 segundos
-        if (int(modulador_ritmo * delta_phi) % 2) == 0:
-            resultado[i] = tabla[int(posicion)]
-        else:
-            # Salto armónico (Identidad Mn)
-            posicion_armonica = (posicion * 1.5) % tamaño_tabla
-            resultado[i] = tabla[int(posicion_armonica)]
+        # EL TRAYECTOR (N):
+        # El Delta Phi decide en qué punto de la escala estamos.
+        # Al usar 440Hz como base, el número ahora tiene un suelo firme.
+        marcador_ritmo = np.floor(t * 3) # Tempo moderado para reconocer la Mn
+        
+        # El diferencial de fase modula la frecuencia respecto a los 440Hz
+        # Usamos una relación logarítmica (como los semitonos reales)
+        factor_frecuencia = (delta_phi * marcador_ritmo) % 2.0
+        frecuencia = f_la * np.power(2, factor_frecuencia - 1)
+        
+        incremento = (frecuencia * 1024) / rate
+        fase_acumulada = (fase_acumulada + incremento) % 1024
+        
+        resultado[i] = tabla[int(fase_acumulada)]
             
-    # 3. Auditoría del Horizonte (8-bit)
     return (127 * resultado + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.set_page_config(page_title="🛡️ Torres v26 - Wavetable", page_icon="📡")
-st.title("🛡️ Trayector v26: Motor de Identidad Invariante")
-st.write("Generación mediante Tabla de Ondas. La melodía emerge del diferencial de fase.")
+st.title("🛡️ Trayector v29: Igualación a 440Hz")
+st.write("Anclando el diferencial de fase a la frecuencia de referencia universal.")
 
 delta_phi = st.sidebar.number_input(
-    "Diferencial de Identidad (ΔΦ)", 
+    "ΔΦ (Diferencial de Identidad)", 
     format="%.15f", 
     value=2.721055555555556, 
     step=1e-15
 )
 
-if st.button("Sintonizar Mn"):
+if st.button("Manifestar en 440Hz"):
     rate = 22050
-    with st.spinner("Estabilizando frecuencia portadora..."):
-        audio_data = motor_torres_wavetable(delta_phi, rate)
-        
+    with st.spinner("Sincronizando con el patrón universal..."):
+        audio_data = motor_torres_440(delta_phi, rate)
         buffer = io.BytesIO()
         wavfile.write(buffer, rate, audio_data)
-        
-        st.success("Señal de identidad sintonizada.")
+        st.success("Sintonía lograda sobre la base de 440Hz.")
         st.audio(buffer, format='audio/wav')
