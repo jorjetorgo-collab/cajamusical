@@ -3,56 +3,65 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE COLAPSO DE IDENTIDAD (v15) ---
-def colapsador_identidad_torres(m0_data, delta_phi, rate):
-    # 1. TRABAJO EN ALTA RESOLUCIÓN (64-bit)
-    sustrato = m0_data.astype(np.float64) / np.max(np.abs(m0_data))
-    n_samples = len(sustrato)
-    t = np.arange(n_samples) / rate
+# --- BIBLIOTECA DE SONIDOS 8-BIT (SISTEMA CERRADO) ---
+def generar_nota_8bit(frecuencia, duracion, rate, sustrato_fragmento):
+    t = np.linspace(0, duracion, int(rate * duracion), endpoint=False)
+    # Generamos la base del Nokia (Onda cuadrada para fuerza bruta)
+    onda_pura = np.sign(np.sin(2 * np.pi * frecuencia * t))
     
-    # 2. GENERACIÓN DEL PATRÓN DE INTERFERENCIA CONSTRUCTIVA
-    # Creamos la huella digital (ΔΦ) con precisión infinitesimal
-    # Para Elisa en La Menor (Am) - Frecuencia fundamental ajustada
-    f_referencia = 440.0 * (2**(1/12))**-9 # Ajuste fino a La
-    patron_identidad = np.sin(2 * np.pi * delta_phi * f_referencia * t)
+    # Aplicamos el sustrato (Bach) como modulador de identidad
+    # Esto "ensucia" la onda pura con la desentropía de tu archivo
+    if len(sustrato_fragmento) > len(onda_pura):
+        modulador = sustrato_fragmento[:len(onda_pura)]
+    else:
+        modulador = np.pad(sustrato_fragmento, (0, len(onda_pura)-len(sustrato_fragmento)))
     
-    # 3. EL COLAPSO (Auditoría del Horizonte)
-    # Multiplicamos el sustrato por el patrón elevado a una potencia N 
-    # para estrechar la ventana de probabilidad y eliminar el ruido blanco.
-    # Exponente 4 o 6 actúa como un "embudo" de desentropía.
-    mn_resultado = sustrato * (patron_identidad ** 6)
+    return onda_pura * (modulador / np.max(np.abs(modulador)) if np.max(np.abs(modulador)) > 0 else 1)
+
+def motor_nokia_torres(sustrato_audio, delta_phi, rate):
+    # 1. DEFINICIÓN DE LA MELODÍA Mn (Para Elisa)
+    # Frecuencias de las notas principales
+    E5, Dsh5, B4, D5, C5, A4 = 659.25, 622.25, 493.88, 587.33, 523.25, 440.0
     
-    # 4. NORMALIZACIÓN Y SALIDA ESTABLE
-    # Eliminamos cualquier residuo de DC offset
-    mn_resultado -= np.mean(mn_resultado)
-    mn_max = np.max(np.abs(mn_resultado)) if np.max(np.abs(mn_resultado)) > 0 else 1
+    # La secuencia de la identidad de Beethoven
+    melodia = [
+        (E5, 0.2), (Dsh5, 0.2), (E5, 0.2), (Dsh5, 0.2), (E5, 0.2), 
+        (B4, 0.2), (D5, 0.2), (C5, 0.2), (A4, 0.4)
+    ]
     
-    # Salida en uint8 para cumplir con el estándar de 8 bits que buscamos
-    resultado_final = (127 * (mn_resultado / mn_max) + 128).astype(np.uint8)
+    resultado_final = np.array([], dtype=np.float32)
     
+    # 2. EL TRAYECTOR (N) RECONSTRUYE DESDE EL DICCIONARIO
+    for i, (frec, dur) in enumerate(melodia):
+        # Usamos el delta_phi para saltar a un punto distinto del sustrato de Bach
+        # para cada nota. Así Bach pierde su orden y cede su identidad a Beethoven.
+        punto_muestreo = int((i * delta_phi * rate) % (len(sustrato_audio) - int(rate * 0.4)))
+        fragmento_bach = sustrato_audio[punto_muestreo : punto_muestreo + int(rate * dur)]
+        
+        nota = generar_nota_8bit(frec, dur, rate, fragmento_bach)
+        resultado_final = np.append(resultado_final, nota)
+    
+    # 3. NORMALIZACIÓN 8-BIT (Auditoría del Horizonte)
+    resultado_final = (resultado_final / np.max(np.abs(resultado_final)) * 127 + 128).astype(np.uint8)
     return resultado_final
 
 # --- INTERFAZ ---
-st.title("🛡️ Colapsador de Identidad v15")
-st.write("Eliminando la incertidumbre residual para manifestar $M_{0b}$.")
+st.title("🛡️ Reconstructor de Identidad v16")
+st.write("Usando Bach como 'biblioteca de átomos' para reconstruir Para Elisa (8-bit)")
 
-delta_phi = st.sidebar.number_input(
-    "Diferencial de Identidad (ΔΦ)", 
-    format="%.15f", 
-    value=2.721055555555556, 
-    step=1e-15
-)
+delta_phi = st.sidebar.number_input("ΔΦ (15 decimales)", format="%.15f", value=2.721055555555556)
 
-archivo = st.file_uploader("Subir M0 (Ruido con melodía incipiente)", type=["wav"])
+archivo = st.file_uploader("Subir Bach (Sustrato de átomos)", type=["wav"])
 
 if archivo is not None:
     rate, data = wavfile.read(archivo)
     if len(data.shape) > 1: data = data[:, 0]
     
-    if st.button("Colapsar Entropía"):
-        with st.spinner("Anulando ruido residual..."):
-            resultado = colapsador_identidad_torres(data, delta_phi, rate)
+    if st.button("Reconstrucción Forzada"):
+        with st.spinner("Extrayendo átomos de Bach para Beethoven..."):
+            # Aquí ocurre la magia: Bach ya no dicta el tiempo, solo presta sus bits
+            resultado = motor_nokia_torres(data, delta_phi, rate)
             buffer = io.BytesIO()
             wavfile.write(buffer, rate, resultado)
-            st.success("Soberanía de la Identidad manifestada.")
+            st.success("Soberanía recuperada: Para Elisa 8-bit manifestada.")
             st.audio(buffer, format='audio/wav')
