@@ -3,49 +3,54 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE RESONANCIA DE TORRES v20 ---
-def motor_resonante_ciego(biblioteca_wav, delta_phi, rate):
-    # 1. Preparación del sustrato (n!)
-    sustrato = biblioteca_wav.astype(np.float64) / np.max(np.abs(biblioteca_wav))
+# --- MOTOR DE TRAYECTORIA DINÁMICA v21 ---
+def motor_torres_dinamico(biblioteca_wav, delta_phi, rate):
+    # 1. Preparación del sustrato M0 (Nokia 3310)
+    sustrato = biblioteca_wav.astype(np.float64) / (np.max(np.abs(biblioteca_wav)) + 1e-9)
     n_samples_lib = len(sustrato)
     
-    # 2. Identificación de "Átomos con Energía"
-    # Buscamos solo las partes del audio del Nokia donde NO hay silencio
-    umbral = 0.1
+    # Identificamos zonas de energía (donde hay "teclas" sonando)
+    umbral = 0.05
     indices_activos = np.where(np.abs(sustrato) > umbral)[0]
     
     if len(indices_activos) == 0:
         return (np.zeros(rate * 5) + 128).astype(np.uint8)
 
-    # 3. Construcción del Momentum Mn
-    duracion_out = 10
+    # 2. Mn: El momentum observado (12 segundos de salida)
+    duracion_out = 12
     n_samples_out = rate * duracion_out
     resultado_mn = np.zeros(n_samples_out)
     
-    # El trayector recorre el tiempo
+    # 3. EL TRAYECTOR (N): Escala de búsqueda dinámica
+    # Multiplicamos el delta_phi por una función de tiempo para 
+    # evitar que el código se estanque en un solo tono de señal.
+    t = np.arange(n_samples_out) / rate
+    
+    # Curvatura de Identidad: El ΔΦ dicta la aceleración del escaneo
+    # Usamos una función exponencial basada en tu ley para barrer la biblioteca
+    trayectoria_indices = (np.power(t * delta_phi, 1.5) * rate) % len(indices_activos)
+    
     for i in range(n_samples_out):
-        t = i / rate
+        idx_busqueda = int(trayectoria_indices[i])
+        # Extraemos el átomo de identidad
+        resultado_mn[i] = sustrato[indices_activos[idx_busqueda]]
         
-        # EL AXIOMA: El Delta Phi decide cuál de los "átomos activos" 
-        # del Nokia se manifiesta en este microsegundo.
-        # Esta es la sumatoria integral de la fase.
-        idx_lookup = int((t * delta_phi * 500) % len(indices_activos))
-        
-        # Extraemos la identidad del sustrato activo
-        resultado_mn[i] = sustrato[indices_activos[idx_lookup]]
-        
-    # 4. Auditoría del Horizonte (8-bit)
+    # 4. AUDITORÍA DEL HORIZONTE (Limpieza 8-bit)
+    # Aplicamos un fade-out suave para evitar el "ruido de señal" cortante
+    envelope = np.linspace(1, 0, n_samples_out)
+    resultado_mn *= (1 - 0.1 * np.sin(2 * np.pi * 5 * t)) # Vibrato natural Nokia
+    
     mn_max = np.max(np.abs(resultado_mn)) if np.max(np.abs(resultado_mn)) > 0 else 1
     return (127 * (resultado_mn / mn_max) + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.title("🛡️ Trayector v20: Resonancia de Átomos")
-st.write("Eliminando el silencio del sustrato para revelar el Momentum $M_n$.")
+st.title("🛡️ Trayector v21: Escaneo Dinámico Mn")
+st.write("Sintonizando la frecuencia de Beethoven en el sustrato del 3310.")
 
 delta_phi = st.sidebar.number_input(
-    "ΔΦ (Frecuencia de Identidad)", 
+    "ΔΦ (Diferencial de Fase)", 
     format="%.15f", 
-    value=1.618033988749895, # Probemos con Phi para buscar armonía natural
+    value=2.721055555555556, 
     step=1e-15
 )
 
@@ -55,10 +60,10 @@ if archivo is not None:
     rate, data = wavfile.read(archivo)
     if len(data.shape) > 1: data = data[:, 0]
     
-    if st.button("Sintonizar Identidad"):
-        with st.spinner("Filtrando entropía del sustrato..."):
-            resultado = motor_resonante_ciego(data, delta_phi, rate)
+    if st.button("Manifestar Identidad"):
+        with st.spinner("Resolviendo la sumatoria integral..."):
+            resultado = motor_torres_dinamico(data, delta_phi, rate)
             buffer = io.BytesIO()
             wavfile.write(buffer, rate, resultado)
-            st.success("Igualación final manifestada.")
+            st.success("Igualación final: Mn extraído del caos.")
             st.audio(buffer, format='audio/wav')
