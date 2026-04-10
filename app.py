@@ -3,67 +3,71 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- 1. EL EXTRACTOR (ADN) ---
+# --- 1. EL EXTRACTOR CIEGO (ADN) ---
 def extraer_delta_phi(frecuencias):
     if len(frecuencias) < 2: return 1.0
-    # Limpiamos ceros para no romper la división
+    # Limpieza de ceros para evitar errores matemáticos
     f_limpias = [f if f > 0 else 0.1 for f in frecuencias]
     cambios = [f_limpias[i+1] / f_limpias[i] for i in range(len(f_limpias)-1)]
+    # La firma pura del diferencial
     return np.mean(cambios) * np.std(cambios)
 
-# --- 2. EL MOTOR (SUSTRATO) ---
+# --- 2. EL MOTOR DE MANIFESTACIÓN ---
 def motor_universal(delta_phi, partitura, constante_c, rate=22050):
-    duracion = 10 
+    duracion = 8  # Tiempo de ejecución
     n_samples = int(rate * duracion)
     resultado = np.zeros(n_samples)
     fase_acumulada = 0.0
     
     for i in range(n_samples):
         t = i / rate
-        # Ñ ahora obedece al Slider de la interfaz
-        ñ = int(np.floor(t * (delta_phi * constante_c))) % len(partitura)
+        # Ñ (El Trayector) fluye según el ADN y la Presión (C)
+        index = int(np.floor(t * (delta_phi * constante_c))) % len(partitura)
         
-        frecuencia = partitura[ñ]
-        if frecuencia > 0.5: # Si no es un "silencio"
+        frecuencia = partitura[index]
+        if frecuencia > 0.5:
+            # Generación de onda cuadrada (Nokia Style)
             incremento = (2 * np.pi * frecuencia) / rate
             fase_acumulada += incremento
             muestra = 1.0 if np.sin(fase_acumulada) > 0 else -1.0
         else:
-            muestra = 0
+            muestra = 0  # Silencio absoluto para el 0
             
-        # Pulso rítmico
+        # El "staccato" o pulso rítmico del sistema
         if (t * (delta_phi * constante_c)) % 1.0 > 0.8: muestra = 0
         resultado[i] = muestra
             
     return (127 * resultado + 128).astype(np.uint8)
 
-# --- 3. INTERFAZ (LA CONSOLA) ---
-st.title("🛡️ Motor v53: Control de Presión")
+# --- 3. INTERFAZ (SISTEMA ABIERTO) ---
+st.title("🛡️ Motor v54: Puerto de Inyección")
 
-# AQUÍ ESTÁ LO QUE FALTABA: El control de velocidad
-c_usuario = st.slider("Ajuste de Presión (C):", min_value=5.0, max_value=150.0, value=40.0)
+# Controles de Usuario
+c_presion = st.slider("Ajuste de Presión (C):", 5.0, 150.0, 40.0)
 
-biblioteca = {
-    "Pantera Rosa": "138, 146, 0, 155, 164, 0, 138, 146, 155, 164, 207, 196",
-    "Star Wars": "392, 587, 523, 493, 440, 783, 587",
-    "Misión Imposible": "392, 392, 466, 523, 392, 392, 349, 370"
-}
-
-seleccion = st.selectbox("Elegir Genoma:", list(biblioteca.keys()))
-input_notas = st.text_input("ADN (Frecuencias):", biblioteca[seleccion])
+# El Puerto de Entrada: Aquí pegas lo que quieras
+st.subheader("Inyector de ADN Musical")
+input_libre = st.text_area(
+    "Escribe las frecuencias separadas por coma (0 para silencio):",
+    "261.63, 0, 261.63, 233.08, 261.63, 0, 261.63, 233.08, 261.63, 0, 261.63, 196.0, 207.6"
+)
 
 try:
-    notas = [float(x.strip()) for x in input_notas.split(",")]
+    # Procesamiento de la entrada
+    notas = [float(x.strip()) for x in input_libre.split(",")]
     d_phi = extraer_delta_phi(notas)
     
-    st.write(f"**ΔΦ (Identidad):** `{d_phi:.10f}`")
-    st.write(f"**Velocidad Actual:** `{d_phi * c_usuario:.2f} notas/seg`")
+    col1, col2 = st.columns(2)
+    col1.metric("ΔΦ (Identidad)", f"{d_phi:.6f}")
+    col2.metric("Velocidad (Notas/s)", f"{d_phi * c_presion:.2f}")
 
-    if st.button("Manifestar en el Sustrato"):
-        audio = motor_universal(d_phi, notas, c_usuario)
+    if st.button("🔥 MANIFESTAR ADN"):
+        audio_data = motor_universal(d_phi, notas, c_presion)
         buffer = io.BytesIO()
-        wavfile.write(buffer, 22050, audio)
+        wavfile.write(buffer, 22050, audio_data)
         st.audio(buffer, format='audio/wav')
         
-except:
-    st.error("Error en los datos")
+    st.info("💡 Tip: Para baladas baja C a 20. Para ritmos agresivos sube C a 60.")
+
+except Exception as e:
+    st.warning("Esperando entrada de ADN válida...")
