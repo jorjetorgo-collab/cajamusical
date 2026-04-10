@@ -3,39 +3,52 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE FRECUENCIAS DISCRETAS v37 ---
-def motor_nokia_torres(delta_phi, rate):
-    duracion = 10
+# --- MOTOR DE GENOMA MUSICAL v38 ---
+def motor_genoma_torres(delta_phi, rate):
+    duracion = 8
     n_samples = int(rate * duracion)
     
-    # El Sustrato (M0): Las frecuencias de la escala temperada (Nokia)
-    # Definimos las notas de Para Elisa (Mi5, Re#5, Si4, Re5, Do5, La4)
-    notas_elisa = [659.25, 622.25, 659.25, 622.25, 659.25, 493.88, 587.33, 523.25, 440.00]
+    # EL SUSTRATO DE ADN (M0): Dos genomas distintos en la misma matriz
+    # Genoma 0: Beethoven (Lírico/Salto de semitono)
+    # Genoma 1: Williams (Marcial/Salto de cuarta)
+    genomas = {
+        "beethoven": [659.25, 622.25, 659.25, 622.25, 659.25, 493.88, 587.33, 523.25, 440.00],
+        "williams": [196.00, 196.00, 196.00, 155.56, 233.08, 196.00, 155.56, 233.08, 196.00]
+    }
+    
+    # LA REGLA DE SINTONIZACIÓN:
+    # Si delta_phi está cerca de 1.0 -> Genoma Beethoven
+    # Si delta_phi está cerca de 2.0 -> Genoma Williams
+    if 0.5 <= delta_phi < 1.5:
+        adn_activo = genomas["beethoven"]
+        target = 1.0 # El centro de sintonía para Elisa
+    else:
+        adn_activo = genomas["williams"]
+        target = 2.0 # El centro de sintonía para la Marcha
     
     resultado = np.zeros(n_samples)
     fase_acumulada = 0.0
     
+    # Calculamos la desviación (Qué tan lejos estamos del centro de sintonía)
+    desviacion = abs(delta_phi - target)
+    
     for i in range(n_samples):
         t = i / rate
         
-        # EL TRAYECTOR Ñ (Escalonado):
-        # El tempo de Nokia era rígido. Vamos a usar un pulso de 0.125s (corchea)
-        # El delta_phi aquí actúa como el "estiramiento" de la partitura
-        indice_nota = int(np.floor(t * 6 * delta_phi)) % len(notas_elisa)
+        # El trayector Ñ recorre el genoma activo
+        # La velocidad depende de la desviación: si te alejas del centro, se acelera (efecto Mario)
+        paso = t * 6 * (1 + desviacion)
+        indice = int(np.floor(paso)) % len(adn_activo)
         
-        # Ñ selecciona la frecuencia del sustrato
-        frecuencia = notas_elisa[indice_nota]
+        frecuencia = adn_activo[indice]
         
-        # Generación de Onda Cuadrada (El cristal de Nokia)
+        # Generación de Onda Cuadrada (Nokia Style)
         incremento = (2 * np.pi * frecuencia) / rate
         fase_acumulada += incremento
         
-        # La esencia del 3310: ON u OFF (1 o -1)
+        # El silencio de Nokia (puerta de ruido)
         muestra = 1.0 if np.sin(fase_acumulada) > 0 else -1.0
-        
-        # El "silencio" entre notas (el corte de energía)
-        # Esto es lo que le da el ritmo de "puntos y rayas"
-        if (t * 6 * delta_phi) % 1.0 > 0.9: 
+        if (paso % 1.0) > 0.85: 
             muestra = 0
             
         resultado[i] = muestra
@@ -43,15 +56,15 @@ def motor_nokia_torres(delta_phi, rate):
     return (127 * resultado + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.title("🛡️ Trayector v37: Emulación Nokia 3310")
-st.write("Cambiando la Ñ continua por una Ñ de estados discretos.")
+st.title("🛡️ Trayector v38: Selector de Genoma")
+st.write("Sintoniza la identidad cambiando el diferencial ΔΦ.")
 
-delta_phi = st.number_input("ΔΦ (Velocidad de Partitura)", value=1.0, format="%.4f")
+# Prueba con 1.0 para Beethoven o 2.0 para la Marcha
+delta_phi = st.number_input("Introduce ΔΦ (Sintonizador)", value=1.0, format="%.2f")
 
-if st.button("Ejecutar Tono Nokia"):
+if st.button("Sintonizar Identidad"):
     rate = 22050
-    audio_data = motor_nokia_torres(delta_phi, rate)
+    audio_data = motor_genoma_torres(delta_phi, rate)
     buffer = io.BytesIO()
     wavfile.write(buffer, rate, audio_data)
-    st.success("Tono monofónico generado.")
     st.audio(buffer, format='audio/wav')
