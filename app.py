@@ -4,10 +4,10 @@ from scipy.io import wavfile
 import io
 
 # --- 1. EL EXTRACTOR CIEGO (ΔΦ) ---
-# No conoce canciones. Solo extrae la huella del Momentum Observado (Mn).
+# No conoce canciones. Extrae la huella del Momentum Observado (Mn).
 def extraer_delta_phi(frecuencias):
     if len(frecuencias) < 2: return 1.0
-    # Diferencial de fase: la relación de cambio pura entre estados.
+    # Diferencial de fase: relación de cambio pura entre estados.
     cambios = [frecuencias[i+1] / frecuencias[i] for i in range(len(frecuencias)-1)]
     # La firma del trayector que cancela la entropía.
     return np.mean(cambios) * np.std(cambios)
@@ -21,7 +21,6 @@ def motor_torres_puro(delta_phi, adn_inyectado, rate=22050):
     fase_acumulada = 0.0
     
     # CONSTANTE UNIVERSAL DE ACOPLAMIENTO (C)
-    # Valor fijo para que el observador no altere la estructura.
     C_UNIVERSAL = 50.0 
     
     for i in range(n_samples):
@@ -34,12 +33,12 @@ def motor_torres_puro(delta_phi, adn_inyectado, rate=22050):
         if frecuencia > 0:
             incremento = (2 * np.pi * frecuencia) / rate
             fase_acumulada += incremento
-            # Manifestación física de la identidad conservada.
+            # Manifestación física de la identidad conservada (M0).
             muestra = 1.0 if np.sin(fase_acumulada) > 0 else -1.0
         else:
             muestra = 0 # Silencio absoluto: ausencia de momentum.
             
-        # Sincronización rítmica: la estructura del sustrato.
+        # Sincronización rítmica: la estructura del sustrato (n!).
         if (t * (delta_phi * C_UNIVERSAL)) % 1.0 > 0.8: muestra = 0
         resultado[i] = muestra
             
@@ -49,8 +48,33 @@ def motor_torres_puro(delta_phi, adn_inyectado, rate=22050):
 st.title("🛡️ Motor v55: Tabula Rasa")
 st.markdown("### El caos es solo un orden no trayectado.")
 
-# Puerto de Entrada Único (Sin precargas, sin sugerencias)
+# Puerto de Entrada Único (Sin precargas ni bibliotecas)
 input_adn = st.text_area(
     "Inyectar ADN (Secuencia de Frecuencias Mn):", 
     placeholder="Escribe aquí las frecuencias separadas por coma...",
-    help="El sistema no tiene
+    help="El sistema no tiene memoria. Tú eres el único que posee la Identidad inicial (M0)."
+)
+
+if input_adn:
+    try:
+        # Transformación del ADN en Momentum Mn.
+        adn_lista = [float(x.strip()) for x in input_adn.split(",")]
+        
+        # Cálculo del Diferencial de Fase (ΔΦ).
+        d_phi = extraer_delta_phi(adn_lista)
+        
+        st.info(f"**Identidad Trayectorial (ΔΦ):** `{d_phi:.15f}`")
+        
+        if st.button("🔥 RECLAMAR IDENTIDAD (M0)"):
+            # Proceso de Igualación Final.
+            audio_buffer = motor_torres_puro(d_phi, adn_lista)
+            
+            output = io.BytesIO()
+            wavfile.write(output, 22050, audio_buffer)
+            st.audio(output, format='audio/wav')
+            st.success("Desentropía completada: Identidad Natural manifestada.")
+
+    except Exception as e:
+        st.error(f"Error en la resolución del trayector: {e}")
+else:
+    st.write("Esperando entrada para cancelar la incertidumbre estructural.")
