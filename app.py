@@ -3,15 +3,15 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE REFERENCIA 440Hz v29 ---
-def motor_torres_440(delta_phi, rate):
+# --- MOTOR DE TIEMPO SOBERANO v30 ---
+def motor_torres_tempo(delta_phi, rate):
     duracion = 12
     n_samples = int(rate * duracion)
     
-    # La frecuencia de referencia soberana
+    # Referencia universal
     f_la = 440.0 
     
-    # Generamos la tabla de onda (8-bit pura)
+    # Tabla de onda 8-bit
     t_tabla = np.linspace(0, 1, 1024, endpoint=False)
     tabla = np.sign(np.sin(2 * np.pi * t_tabla))
     
@@ -21,15 +21,15 @@ def motor_torres_440(delta_phi, rate):
     for i in range(n_samples):
         t = i / rate
         
-        # EL TRAYECTOR (N):
-        # El Delta Phi decide en qué punto de la escala estamos.
-        # Al usar 440Hz como base, el número ahora tiene un suelo firme.
-        marcador_ritmo = np.floor(t * 3) # Tempo moderado para reconocer la Mn
+        # EL AXIOMA TEMPORAL:
+        # El tempo ya no es "3". Ahora es una función del Delta Phi.
+        # Esto significa que el número decide CÚANDO cambia la nota.
+        ritmo_variable = np.floor(t * (delta_phi * 2)) 
         
-        # El diferencial de fase modula la frecuencia respecto a los 440Hz
-        # Usamos una relación logarítmica (como los semitonos reales)
-        factor_frecuencia = (delta_phi * marcador_ritmo) % 2.0
-        frecuencia = f_la * np.power(2, factor_frecuencia - 1)
+        # El tono también depende del Delta Phi y del pulso actual
+        # Creamos una relación donde el decimal del diferencial dicta el salto
+        semitono = (delta_phi * ritmo_variable) % 12 # 12 semitonos de la octava
+        frecuencia = f_la * np.power(2, (semitono - 9) / 12) # Ajuste a escala real
         
         incremento = (frecuencia * 1024) / rate
         fase_acumulada = (fase_acumulada + incremento) % 1024
@@ -39,8 +39,8 @@ def motor_torres_440(delta_phi, rate):
     return (127 * resultado + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.title("🛡️ Trayector v29: Igualación a 440Hz")
-st.write("Anclando el diferencial de fase a la frecuencia de referencia universal.")
+st.title("🛡️ Trayector v30: Soberanía de Tempo y Tono")
+st.write("El diferencial de fase ahora controla la estructura temporal del Mn.")
 
 delta_phi = st.sidebar.number_input(
     "ΔΦ (Diferencial de Identidad)", 
@@ -49,11 +49,11 @@ delta_phi = st.sidebar.number_input(
     step=1e-15
 )
 
-if st.button("Manifestar en 440Hz"):
+if st.button("Manifestar Identidad Completa"):
     rate = 22050
-    with st.spinner("Sincronizando con el patrón universal..."):
-        audio_data = motor_torres_440(delta_phi, rate)
+    with st.spinner("Sincronizando tiempo y frecuencia..."):
+        audio_data = motor_torres_tempo(delta_phi, rate)
         buffer = io.BytesIO()
         wavfile.write(buffer, rate, audio_data)
-        st.success("Sintonía lograda sobre la base de 440Hz.")
+        st.success("Igualación final: Tiempo y Tono unificados.")
         st.audio(buffer, format='audio/wav')
