@@ -3,22 +3,17 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE DESENTROPÍA DE TORRES ---
+# --- MOTOR DE DESENTROPÍA ---
 def ejecutar_igualacion_final(audio_data, delta_phi):
     n_samples = len(audio_data)
-    # Resolución de 15 decimales con float64
     t = np.linspace(0, 1, n_samples, dtype=np.float64)
-    
-    # El Trayector define la nueva trayectoria
     nueva_trayectoria = (t * delta_phi) % 1.0
     indices = (nueva_trayectoria * (n_samples - 1)).astype(np.int64)
-    
     return audio_data[indices]
 
 # --- INTERFAZ ---
 st.set_page_config(page_title="Trayector Torres", page_icon="🛡️")
 st.title("🛡️ Sistema de Desentropía")
-st.caption("“La incertidumbre no existe, solo la deficiencia del observador.”")
 
 delta_phi = st.sidebar.number_input(
     "Diferencial de Fase (ΔΦ)", 
@@ -39,7 +34,6 @@ if archivo is not None:
             resultado = ejecutar_igualacion_final(data, delta_phi)
             buffer = io.BytesIO()
             wavfile.write(buffer, rate, resultado.astype(np.int16))
-            
             st.success("Transmutación completada.")
             st.audio(buffer, format='audio/wav')
             st.download_button("Descargar M_n", buffer, "salida_torres.wav", "audio/wav")
