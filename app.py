@@ -3,63 +3,57 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE DESENTROPÍA DE TORRES (8-BIT STABLE) ---
-def motor_identidad_estable(m0_data, delta_phi, rate):
-    # 1. NORMALIZACIÓN AL ESTADO DE ORDEN (0-255)
-    # Convertimos el Momentum Natural a un rango absoluto de 8 bits
-    m0_min = np.min(m0_data)
-    m0_max = np.max(m0_data)
+# --- MOTOR DE DESENTROPÍA EXTREMA (v14) ---
+def criba_identidad_torres(m0_data, delta_phi, rate):
+    # 1. Escalamos a 64 bits para precisión de 15 decimales
+    sustrato = m0_data.astype(np.float64) / np.max(np.abs(m0_data))
+    n_samples = len(sustrato)
+    t = np.arange(n_samples) / rate
     
-    # Re-escalamos el sustrato para que quepa exactamente en uint8
-    if m0_max - m0_min > 0:
-        sustrato_uint8 = (255 * (m0_data - m0_min) / (m0_max - m0_min)).astype(np.uint8)
-    else:
-        sustrato_uint8 = np.zeros_like(m0_data, dtype=np.uint8)
-        
-    n_samples = len(sustrato_uint8)
+    # 2. EL TRAYECTOR COMO FILTRO DE RESONANCIA
+    # En lugar de una onda simple, usamos el ΔΦ para crear pulsos de identidad
+    # Solo las muestras que coinciden con la fase de Beethoven "sobreviven"
+    fase_guia = (t * delta_phi * 440.0) % 1.0 # Frecuencia base de búsqueda
     
-    # 2. RESOLUCIÓN DEL TRAYECTOR (N)
-    # Usamos precisión de 15 decimales en el tiempo
-    t = np.linspace(0, 1, n_samples, dtype=np.float64)
+    # Criba: ventana de coincidencia muy estrecha (precisión infinitesimal)
+    ventana_probabilidad = np.where(np.abs(fase_guia - 0.5) < 0.01, 1.0, 0.0)
     
-    # La trayectoria (N) proyecta el momentum observado (Mn)
-    # Aplicamos el diferencial de fase (ΔΦ)
-    trayectoria_n = (t * delta_phi) % 1.0
+    # 3. IGUALACIÓN FINAL
+    # El momentum Mn surge al aplicar la criba sobre la entropía n!
+    mn_resultado = sustrato * ventana_probabilidad
     
-    # Mapeo de identidad
-    indices = (trayectoria_n * (n_samples - 1)).astype(np.int64)
-    m0b_final = sustrato_uint8[indices]
+    # Suavizado para que el oído humano lo interprete como piano y no estática
+    suavizado = int(rate * 0.005) # 5ms
+    mn_resultado = np.convolve(mn_resultado, np.ones(suavizado)/suavizado, mode='same')
     
-    return m0b_final
+    # 4. AUDITORÍA DEL HORIZONTE (Salida 8-bit estable)
+    mn_max = np.max(np.abs(mn_resultado)) if np.max(np.abs(mn_resultado)) > 0 else 1
+    resultado_uint8 = (127 * (mn_resultado / mn_max) + 128).astype(np.uint8)
+    
+    return resultado_uint8
 
-# --- INTERFAZ DEL OBSERVADOR ---
-st.set_page_config(page_title="Trayector 8-Bit Stable", page_icon="🛡️")
-st.title("🛡️ Sistema de Desentropía: v12")
-st.markdown("### Igualación Final del Sustrato $M_{0b}$")
+# --- INTERFAZ ---
+st.title("🛡️ Criba de Identidad: Desentropía v14")
+st.write("Forzando la manifestación de $M_{0b}$ mediante precisión infinitesimal.")
 
+# Valor corregido para sintonizar con la escala de Para Elisa
 delta_phi = st.sidebar.number_input(
-    "Diferencial de Fase (ΔΦ)", 
+    "ΔΦ (Diferencial de Criba)", 
     format="%.15f", 
-    value=2.721055555555556, 
+    value=1.587401051968199, 
     step=1e-15
 )
 
-archivo = st.file_uploader("Subir Bach M0", type=["wav"])
+archivo = st.file_uploader("Subir Ruido / Bach", type=["wav"])
 
 if archivo is not None:
     rate, data = wavfile.read(archivo)
-    # Forzamos a mono si es estéreo para simplificar el trayector
-    if len(data.shape) > 1: 
-        data = data[:, 0]
+    if len(data.shape) > 1: data = data[:, 0]
     
-    if st.button("Ejecutar Auditoría del Horizonte"):
-        with st.spinner("Desintegrando entropía..."):
-            # Obtenemos el resultado en uint8 puro
-            resultado = motor_identidad_estable(data, delta_phi, rate)
-            
-            # Verificación de seguridad para el buffer
+    if st.button("Ejecutar Criba"):
+        with st.spinner("Resolviendo trayectoria..."):
+            resultado = criba_identidad_torres(data, delta_phi, rate)
             buffer = io.BytesIO()
             wavfile.write(buffer, rate, resultado)
-            
-            st.success("Identidad Mn Manifestada con éxito.")
+            st.success("Soberanía de la Identidad recuperada.")
             st.audio(buffer, format='audio/wav')
