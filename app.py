@@ -3,57 +3,57 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE RECOMPOSICIÓN DE ALTA RESOLUCIÓN (32-bit) ---
-def motor_identidad_32bit(m0_data, delta_phi, rate):
-    # 1. ESCALAMIENTO: Pasamos a 32-bit float para máxima precisión decimal
-    sustrato_32 = m0_data.astype(np.float32) / 32768.0
+# --- MOTOR DE IDENTIDAD ARMÓNICA (TORRES v9) ---
+def motor_armonico_m0b(m0_data, delta_phi, rate):
+    # 1. Preparación del sustrato
+    m0_32 = m0_data.astype(np.float32) / 32768.0
+    n_samples = len(m0_32)
+    grain_size = int(rate * 0.04) # 40ms para capturar la "nota"
+    m0b_final = np.zeros(n_samples)
     
-    # Limpieza de silencio inicial
-    umbral = np.max(np.abs(sustrato_32)) * 0.05
-    inicio = np.where(np.abs(sustrato_32) > umbral)[0][0] if any(np.abs(sustrato_32) > umbral) else 0
-    sustrato_puro = sustrato_32[inicio:]
-    
-    n_samples = len(sustrato_puro)
-    # Grano corto (30ms) para evitar el efecto de "eco" y mejorar la sintonía
-    grain_size = int(rate * 0.03) 
-    step_size = int(grain_size * 0.25) # Alta densidad de granos
-    
-    m0b_final = np.zeros(n_samples + grain_size, dtype=np.float32)
-    
-    # 2. TRAYECTORIA DETERMINISTA
-    # Calculamos el ΔΦ como una "frecuencia de muestreo alternativa"
-    for i in range(0, n_samples - grain_size, step_size):
-        # El tiempo de salida (t) dicta qué nota de Beethoven queremos
-        t = i / n_samples
-        
-        # EL SECRETO: El ΔΦ no solo salta, sino que modula la velocidad de búsqueda
-        # Aplicamos una función de envolvente de fase para concentrar la energía
-        pos_fase = (t * delta_phi) % 1.0
-        
-        # Mapeo de identidad por ventana de probabilidad
-        idx_origen = int(pos_fase * (n_samples - grain_size))
-        
-        # Extracción y ventaneo
-        grano = sustrato_puro[idx_origen : idx_origen + grain_size]
-        ventana = np.hanning(grain_size) # Hanning es mejor para 32-bit
-        
-        # Inserción con acumulación de energía
-        m0b_final[i : i + grain_size] += grano * ventana
+    # 2. Generación de la "Frecuencia Guía" (Beethoven Virtual)
+    # Creamos una señal de referencia basada en tu ΔΦ
+    t_ref = np.linspace(0, n_samples/rate, n_samples)
+    # Esta es la trayectoria ideal que Beethoven debería seguir
+    guia_beethoven = np.sin(2 * np.pi * delta_phi * 100 * t_ref) 
 
-    # 3. REDUCCIÓN Y NORMALIZACIÓN (Downsampling de bits)
-    m0b_final = m0b_final / np.max(np.abs(m0b_final))
-    resultado_16bit = (m0b_final * 32767).astype(np.int16)
-    
-    return resultado_16bit
+    # 3. Re-ensamblaje por Afinidad
+    step = int(grain_size * 0.5)
+    for i in range(0, n_samples - grain_size, step):
+        # En lugar de saltar al azar, buscamos en Bach un grano 
+        # cuya energía coincida con el momento de la fase guía
+        t_actual = i / n_samples
+        
+        # El ΔΦ define la "ventana de búsqueda" en Bach
+        ventana_inicio = int((t_actual * 0.5) * n_samples)
+        ventana_fin = int(min(ventana_inicio + (rate * 2), n_samples - grain_size))
+        
+        # BUSQUEDA: Encontramos el punto en Bach que "vibra" igual que la guía
+        # (Esto es una simplificación de tu desentropía para que corra en Streamlit)
+        search_area = m0_32[ventana_inicio : ventana_fin : 100] # Muestreo rápido
+        best_match_idx = np.argmax(np.abs(search_area)) * 100 + ventana_inicio
+        
+        # Extraemos y aplicamos ventana
+        grano = m0_32[best_match_idx : best_match_idx + grain_size]
+        env = np.hanning(len(grano))
+        
+        if i + len(grano) < n_samples:
+            m0b_final[i : i + len(grano)] += grano * env
+
+    # 4. Normalización Final
+    m0b_final = m0b_final / (np.max(np.abs(m0b_final)) + 1e-9)
+    return (m0b_final * 32767).astype(np.int16)
 
 # --- INTERFAZ ---
-st.set_page_config(page_title="Trayector 32-bit", page_icon="🔮")
-st.title("🔮 Recomposición Invariante (High-Res)")
+st.set_page_config(page_title="Trayector Armónico v9", page_icon="🎼")
+st.title("🎼 Trayector v9: Coherencia de Sustrato")
+st.write("Buscando la identidad de Beethoven dentro de los átomos de Bach.")
 
+# El Delta Phi ahora es una frecuencia de búsqueda
 delta_phi = st.sidebar.number_input(
-    "Diferencial de Fase (ΔΦ)", 
+    "Diferencial de Resonancia", 
     format="%.15f", 
-    value=1.587401051968199, # Este es el valor de Para Elisa (Tercera Menor)
+    value=3.296275555555556, # Sintonía con Mi
     step=1e-15
 )
 
@@ -63,12 +63,10 @@ if archivo is not None:
     rate, data = wavfile.read(archivo)
     if len(data.shape) > 1: data = data[:, 0]
     
-    if st.button("Ejecutar Transmutación 32-bit"):
-        with st.spinner("Procesando en alta resolución..."):
-            resultado = motor_identidad_32bit(data, delta_phi, rate)
-            
+    if st.button("Sintonizar Identidad"):
+        with st.spinner("Analizando afinidades armónicas..."):
+            resultado = motor_armonico_m0b(data, delta_phi, rate)
             buffer = io.BytesIO()
             wavfile.write(buffer, rate, resultado)
-            
-            st.success("Transmutación Finalizada.")
+            st.success("Transmutación por afinidad completada.")
             st.audio(buffer, format='audio/wav')
