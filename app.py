@@ -41,4 +41,13 @@ delta_phi = st.sidebar.number_input(
 
 rate = 22050
 
-if st
+if st.button("Manifestar Sonido"):
+    with st.spinner("Colapsando la función de onda..."):
+        # Generación directa
+        resultado = motor_torres_directo(delta_phi, rate)
+        
+        buffer = io.BytesIO()
+        wavfile.write(buffer, rate, resultado)
+        
+        st.success("Identidad manifestada directamente.")
+        st.audio(buffer, format='audio/wav')
