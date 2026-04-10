@@ -3,53 +3,51 @@ import numpy as np
 from scipy.io import wavfile
 import io
 
-# --- MOTOR DE TRAYECTORIA REAL v35 ---
-def motor_torres_trayector(delta_phi, rate):
+# --- MOTOR DE HUELLA GENÉTICA v36 ---
+def motor_torres_genetico(delta_phi, rate):
     duracion = 12
     n_samples = int(rate * duracion)
-    
-    # El sustrato puro (M0): Un ciclo de onda de 8-bits
-    t_tabla = np.linspace(0, 1, 1024, endpoint=False)
-    tabla = np.sign(np.sin(2 * np.pi * t_tabla))
+    f_la = 440.0 
     
     resultado = np.zeros(n_samples)
     
-    # --- CONSTRUCCIÓN DE Ñ ---
-    # Ñ no es un número estático, es un acumulador
-    N_tilde = 0.0 
+    # Ñ es la suma acumulada de la huella genética
+    N_tilde = 0.0
+    fase_audio = 0.0
     
     for i in range(n_samples):
-        # La presión de Delta Phi sobre el tiempo
-        # Ñ crece según la voluntad del diferencial
-        paso_ñ = (delta_phi * 440.0) / rate
-        N_tilde += paso_ñ
+        t = i / rate
         
-        # El trayector Ñ recorre el sustrato circularmente
-        indice = int(N_tilde * 1024) % 1024
+        # 1. EL DIFERENCIADOR (La esencia de tu idea)
+        # Extraemos el diferencial del pulso y del tono desde delta_phi
+        # Usamos la parte fraccionaria para que Ñ 'sienta' el cambio
+        diferencial_tempo = (delta_phi * t) % 1.0
+        diferencial_tono = (delta_phi / (t + 1)) % 1.0
         
-        # Aplicamos una modulación de Ñ para que la identidad no sea plana
-        # Ñ decide cuándo la fase colapsa o salta
-        modulacion_ñ = np.sin(N_tilde * 0.001 * delta_phi)
+        # 2. LA SUMA (Ñ como Huella Genética)
+        # Ñ acumula el cambio de tempo y tono segundo a segundo
+        cambio_instante = (diferencial_tempo + diferencial_tono) * delta_phi
+        N_tilde += cambio_instante / rate 
         
-        resultado[i] = tabla[indice] * (0.5 + 0.5 * modulacion_ñ)
+        # 3. LA MANIFESTACIÓN (M0 -> Mn)
+        # Ñ ahora dicta la frecuencia final de forma no lineal
+        frecuencia = f_la * (1 + (N_tilde % 2.0))
+        
+        # Generación de la muestra (Onda de 8 bits)
+        fase_audio += (2 * np.pi * frecuencia) / rate
+        resultado[i] = np.sign(np.sin(fase_audio))
             
     return (127 * resultado + 128).astype(np.uint8)
 
 # --- INTERFAZ ---
-st.title("🛡️ Trayector v35: El Vehículo Ñ")
-st.write("Aquí Ñ se construye paso a paso integrando el diferencial ΔΦ.")
+st.title("🛡️ Trayector v36: Integrador de Huella Genética")
+st.write("Ñ aquí es la suma de los diferenciales de tiempo y tono.")
 
-delta_phi = st.number_input(
-    "ΔΦ (La Presión Informativa)", 
-    format="%.15f", 
-    value=2.721055555555556, 
-    step=1e-15
-)
+delta_phi = st.number_input("ΔΦ Maestro", format="%.15f", value=2.721055555555556)
 
-if st.button("Manifestar Ñ"):
+if st.button("Calcular Huella Ñ"):
     rate = 22050
-    audio_data = motor_torres_trayector(delta_phi, rate)
+    audio_data = motor_torres_genetico(delta_phi, rate)
     buffer = io.BytesIO()
     wavfile.write(buffer, rate, audio_data)
-    st.success("Trayector Ñ generado desde el sustrato neutro.")
     st.audio(buffer, format='audio/wav')
